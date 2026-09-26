@@ -1,0 +1,135 @@
+"""OAuth flow coordination helpers."""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import html
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from datetime import datetime
+from urllib.parse import parse_qs, urlparse
+
+from mcp.client.auth import AuthorizationCodeResult
+
+from robinhood_mcp.config import is_loopback_host
+from robinhood_mcp.errors import ConfigurationError, InvalidOAuthCallback
+
+
+def _origin(parts: object) -> tuple[str, str, int | None]:
+    parsed = parts if hasattr(parts, "scheme") else urlparse(str(parts))
+    return parsed.scheme.lower(), (parsed.hostname or "").lower(), parsed.port
+
+
+def parse_oauth_callback(callback_url: str, expected_redirect_uri: str) -> AuthorizationCodeResult:
+    """Parse a callback URL while preserving the OAuth state and issuer verbatim."""
+
+    callback = urlparse(callback_url.strip())
+    expected = urlparse(expected_redirect_uri)
+    if _origin(callback) != _origin(expected) or callback.path != expected.path:
+        raise InvalidOAuthCallback("Callback URL does not match the registered redirect URI")
+
+    params = parse_qs(callback.query, keep_blank_values=True)
+    if "error" in params:
+        description = params.get("error_description", [params["error"][0]])[0]
+        raise InvalidOAuthCallback(f"Authorization server rejected the request: {description}")
+    code = params.get("code", [None])[0]
+    state = params.get("state", [None])[0]
+    if not code or not state:
+        raise InvalidOAuthCallback("Callback URL must contain non-empty code and state parameters")
+    return AuthorizationCodeResult(
+        code=code,
+        state=state,
+        iss=params.get("iss", [None])[0],
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizationFlow:
+    """A pending headless authorization flow."""
+
+    flow_id: str
+    authorization_url: str
+    redirect_uri: str
+    expires_at: datetime
+    _complete: Callable[[str, str], Awaitable[None]] = field(repr=False, compare=False)
+
+    async def complete(self, callback_url: str) -> None:
+        await self._complete(self.flow_id, callback_url)
+
+
+class LoopbackCallbackReceiver:
+    """Tiny one-shot HTTP receiver used by the desktop browser flow."""
+
+    def __init__(self, redirect_uri: str) -> None:
+        self.redirect_uri = redirect_uri
+        self._parsed = urlparse(redirect_uri)
+        if self._parsed.scheme != "http" or not self._parsed.hostname:
+            raise ConfigurationError("Browser login requires an HTTP loopback redirect URI")
+        if not is_loopback_host(self._parsed.hostname):
+            raise ConfigurationError("Browser login requires a loopback redirect URI")
+        self._server: asyncio.Server | None = None
+        self._callback: asyncio.Future[str] | None = None
+
+    async def __aenter__(self) -> LoopbackCallbackReceiver:
+        loop = asyncio.get_running_loop()
+        self._callback = loop.create_future()
+        self._server = await asyncio.start_server(
+            self._handle,
+            self._parsed.hostname,
+            self._parsed.port or 80,
+        )
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        if self._server is not None:
+            self._server.close()
+            await self._server.wait_closed()
+
+    async def wait(self, wait_seconds: float) -> str:
+        if self._callback is None:
+            raise RuntimeError("Callback receiver has not been started")
+        async with asyncio.timeout(wait_seconds):
+            return await asyncio.shield(self._callback)
+
+    async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        status = "400 Bad Request"
+        title = "Authorization callback rejected"
+        try:
+            request_line = (await reader.readline()).decode("ascii", errors="replace").strip()
+            while True:
+                line = await reader.readline()
+                if line in {b"\r\n", b"\n", b""}:
+                    break
+            method, target, _ = request_line.split(" ", 2)
+            target_parts = urlparse(target)
+            if method != "GET" or target_parts.path != self._parsed.path:
+                raise ValueError("Unexpected callback request")
+            port = self._parsed.port
+            authority = self._parsed.hostname or "127.0.0.1"
+            if ":" in authority:
+                authority = f"[{authority}]"
+            if port is not None:
+                authority = f"{authority}:{port}"
+            callback_url = f"{self._parsed.scheme}://{authority}{target}"
+            if self._callback is not None and not self._callback.done():
+                self._callback.set_result(callback_url)
+            status = "200 OK"
+            title = "Authorization received. You can close this window."
+        except ValueError, UnicodeError, asyncio.IncompleteReadError:
+            pass
+
+        body = (
+            "<!doctype html><html><head><meta charset='utf-8'><title>Robinhood MCP</title>"
+            f"</head><body><p>{html.escape(title)}</p></body></html>"
+        ).encode()
+        writer.write(
+            f"HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\n"
+            f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode()
+            + body
+        )
+        with contextlib.suppress(ConnectionError):
+            await writer.drain()
+        writer.close()
+        with contextlib.suppress(ConnectionError):
+            await writer.wait_closed()

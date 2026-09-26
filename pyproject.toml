@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "robinhood-mcp-wrapper"
+version = "0.1.0"
+description = "A typed Python, REST, and CLI wrapper for Robinhood Agentic Trading MCP"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+authors = [{ name = "Robinhood MCP Wrapper contributors" }]
+dependencies = [
+    "fastapi>=0.115,<1",
+    "httpx2>=2.5,<3",
+    "jsonschema>=4.23,<5",
+    "mcp>=2.2,<3",
+    "platformdirs>=4.3,<5",
+    "pydantic>=2.12,<3",
+    "typer>=0.16,<1",
+    "uvicorn>=0.31,<1",
+]
+
+[project.scripts]
+robinhood-mcp = "robinhood_mcp.cli:app"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28,<1",
+    "pytest>=8.3,<10",
+    "pytest-cov>=6,<8",
+    "ruff>=0.11,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/robinhood_mcp"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+markers = ["live: opt-in tests against the real Robinhood MCP endpoint"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+
+[tool.coverage.run]
+branch = true
+source = ["robinhood_mcp"]
