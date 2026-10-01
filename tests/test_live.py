@@ -4,8 +4,8 @@ import os
 
 import pytest
 
-from robinhood_mcp.client import RobinhoodMCPClient
-from robinhood_mcp.config import Settings
+from robinhood_mcp_wrapper.client import RobinhoodMCPClient
+from robinhood_mcp_wrapper.config import Settings
 
 pytestmark = [
     pytest.mark.live,

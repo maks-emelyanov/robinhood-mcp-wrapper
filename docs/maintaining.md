@@ -25,10 +25,10 @@ contacts or ownership entries.
 
 ## Prepare a release
 
-Choose a version and update both `pyproject.toml` and `src/robinhood_mcp/__init__.py`. Move reviewed
-`Unreleased` entries in [CHANGELOG.md](../CHANGELOG.md) into a dated version section, stating any
-breaking changes, dependency changes, and migration steps. If project metadata changes, run
-`uv lock` and review the resulting lockfile.
+Choose a version and update both `pyproject.toml` and `src/robinhood_mcp_wrapper/__init__.py`.
+Move reviewed `Unreleased` entries in [CHANGELOG.md](../CHANGELOG.md) into a dated version section,
+stating any breaking changes, dependency changes, and migration steps. If project metadata
+changes, run `uv lock` and review the resulting lockfile.
 
 From a clean checkout of the release candidate, run:
 
@@ -36,7 +36,7 @@ From a clean checkout of the release candidate, run:
 uv sync --locked --all-groups
 uv run --locked ruff check .
 uv run --locked ruff format --check .
-uv run --locked pytest -m 'not live' --cov=robinhood_mcp --cov-report=term-missing
+uv run --locked pytest -m 'not live' --cov=robinhood_mcp_wrapper --cov-report=term-missing
 uv build --no-sources
 uv run --locked python scripts/check_dist.py
 ```

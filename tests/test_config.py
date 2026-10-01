@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from robinhood_mcp.config import Settings, is_loopback_host
-from robinhood_mcp.errors import ConfigurationError
+from robinhood_mcp_wrapper.config import Settings, is_loopback_host
+from robinhood_mcp_wrapper.errors import ConfigurationError
 
 
 @pytest.mark.parametrize("host", ["127.0.0.1", "::1", "[::1]", "localhost"])

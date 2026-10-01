@@ -1,6 +1,7 @@
 """Print server metadata and tool schemas without invoking trading tools.
 
-Authenticate first with ``uv run --locked robinhood-mcp auth login``, then run from the root:
+Authenticate first with ``uv run --locked robinhood-mcp-wrapper auth login``,
+then run from the root:
 ``uv run --locked python examples/discover_tools.py``.
 """
 
@@ -9,9 +10,9 @@ from __future__ import annotations
 import asyncio
 import json
 
-from robinhood_mcp import RobinhoodMCPClient
-from robinhood_mcp.errors import RobinhoodMCPError
-from robinhood_mcp.serialization import to_jsonable
+from robinhood_mcp_wrapper import RobinhoodMCPClient
+from robinhood_mcp_wrapper.errors import RobinhoodMCPError
+from robinhood_mcp_wrapper.serialization import to_jsonable
 
 
 async def main() -> None:

@@ -1,4 +1,4 @@
-# Robinhood Agentic Trading MCP Wrapper
+# Robinhood MCP Wrapper
 
 [![CI](https://github.com/maks-emelyanov/robinhood-mcp-wrapper/actions/workflows/ci.yml/badge.svg)](https://github.com/maks-emelyanov/robinhood-mcp-wrapper/actions/workflows/ci.yml)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-blue)](https://github.com/maks-emelyanov/robinhood-mcp-wrapper/blob/main/pyproject.toml)
@@ -41,8 +41,8 @@ Clone the repository, install the locked dependencies, and inspect the CLI:
 git clone https://github.com/maks-emelyanov/robinhood-mcp-wrapper.git
 cd robinhood-mcp-wrapper
 uv sync --locked --all-groups
-uv run --locked robinhood-mcp --help
-uv run --locked robinhood-mcp --version
+uv run --locked robinhood-mcp-wrapper --help
+uv run --locked robinhood-mcp-wrapper --version
 ```
 
 Install from this checkout rather than assuming the package has been published to a package
@@ -53,12 +53,28 @@ The wrapper reads configuration from the process environment; it does not load `
 itself. `.env.example` lists every supported variable. Export any overrides in your shell or load
 them with your preferred environment/process manager before running the CLI or REST gateway.
 
+### Migrate an existing checkout
+
+After pulling the rename, run `uv sync --locked --all-groups` again to refresh the editable
+installation. Update scripts, imports, and service commands to use the new names:
+
+| Previous name | Current name |
+| --- | --- |
+| `robinhood-mcp` | `robinhood-mcp-wrapper` |
+| `robinhood_mcp` imports | `robinhood_mcp_wrapper` imports |
+| `python -m robinhood_mcp` | `python -m robinhood_mcp_wrapper` |
+
+The previous names have no compatibility aliases. The distribution name remains
+`robinhood-mcp-wrapper`. Environment variables, the default OAuth client name, and credential
+storage are unchanged, so existing tokens and client registration remain usable with the same
+settings; no credential move or new login is required by the rename.
+
 ### Local credential storage
 
 OAuth tokens and dynamic client-registration data are stored in a passwordless JSON file under the platform's per-user data directory. Print the exact path with:
 
 ```bash
-uv run --locked python -c 'from robinhood_mcp.config import Settings; from robinhood_mcp.storage import FileTokenStorage; print(FileTokenStorage(Settings.from_env()).path)'
+uv run --locked python -c 'from robinhood_mcp_wrapper.config import Settings; from robinhood_mcp_wrapper.storage import FileTokenStorage; print(FileTokenStorage(Settings.from_env()).path)'
 ```
 
 The wrapper creates the file atomically and restricts it to the current OS user with mode `0600` on POSIX systems. No keyring password or D-Bus service is required.
@@ -76,15 +92,15 @@ export ROBINHOOD_CREDENTIALS_FILE=/absolute/path/to/robinhood-credentials.json
 Desktop login starts a one-shot callback listener at `127.0.0.1:8765` and opens Robinhood in the default browser:
 
 ```bash
-uv run --locked robinhood-mcp auth login
-uv run --locked robinhood-mcp auth status
-uv run --locked robinhood-mcp tools list --refresh
+uv run --locked robinhood-mcp-wrapper auth login
+uv run --locked robinhood-mcp-wrapper auth status
+uv run --locked robinhood-mcp-wrapper tools list --refresh
 ```
 
 For SSH or headless use, open the displayed URL in any browser. After Robinhood redirects, copy the complete callback URL from the address bar—even if the browser cannot load it—and paste it into the prompt:
 
 ```bash
-uv run --locked robinhood-mcp auth login --manual
+uv run --locked robinhood-mcp-wrapper auth login --manual
 ```
 
 `auth logout` deletes tokens but retains the dynamically registered client so future logins reuse it. Add `--forget-client` to delete both.
@@ -100,20 +116,20 @@ Options that accept JSON (`--arguments` and `--context`) can receive either inli
 
 ```bash
 # Discover current tools; no Robinhood tool names are hard-coded.
-uv run --locked robinhood-mcp tools list
+uv run --locked robinhood-mcp-wrapper tools list
 
 # CLI listing returns one page. Follow nextCursor using --cursor when present.
-uv run --locked robinhood-mcp tools list --cursor CURSOR
+uv run --locked robinhood-mcp-wrapper tools list --cursor CURSOR
 
 # Call a discovered tool. This is a transparent pass-through and may trade.
-uv run --locked robinhood-mcp tools call TOOL_NAME --arguments '{"field":"value"}'
+uv run --locked robinhood-mcp-wrapper tools call TOOL_NAME --arguments '{"field":"value"}'
 
-uv run --locked robinhood-mcp resources list
-uv run --locked robinhood-mcp resources list --templates
-uv run --locked robinhood-mcp resources read 'RESOURCE_URI'
-uv run --locked robinhood-mcp prompts list
-uv run --locked robinhood-mcp prompts get PROMPT_NAME --arguments '{"name":"value"}'
-uv run --locked robinhood-mcp prompts complete \
+uv run --locked robinhood-mcp-wrapper resources list
+uv run --locked robinhood-mcp-wrapper resources list --templates
+uv run --locked robinhood-mcp-wrapper resources read 'RESOURCE_URI'
+uv run --locked robinhood-mcp-wrapper prompts list
+uv run --locked robinhood-mcp-wrapper prompts get PROMPT_NAME --arguments '{"name":"value"}'
+uv run --locked robinhood-mcp-wrapper prompts complete \
   --ref-type prompt \
   --ref PROMPT_NAME \
   --argument-name ARGUMENT_NAME \
@@ -128,7 +144,7 @@ The wrapper validates tool arguments against the server's current JSON Schema. I
 ```python
 import asyncio
 
-from robinhood_mcp import RobinhoodMCPClient
+from robinhood_mcp_wrapper import RobinhoodMCPClient
 
 
 async def main() -> None:
@@ -165,14 +181,14 @@ tool can report an error in an otherwise successful protocol response.
 Start the single-user, single-worker gateway:
 
 ```bash
-uv run --locked robinhood-mcp serve
+uv run --locked robinhood-mcp-wrapper serve
 ```
 
 OpenAPI documentation is at <http://127.0.0.1:8765/docs>. The API is loopback-only by default. To bind another interface, set a strong bearer key first; startup is refused otherwise:
 
 ```bash
 export ROBINHOOD_API_KEY='replace-with-a-long-random-value'
-uv run --locked robinhood-mcp serve --host 0.0.0.0 --port 8765
+uv run --locked robinhood-mcp-wrapper serve --host 0.0.0.0 --port 8765
 ```
 
 When a key is configured, send `Authorization: Bearer $ROBINHOOD_API_KEY` to every route except `/healthz` and `/oauth/callback`.
@@ -268,7 +284,7 @@ Changing the endpoint, client name, scope, or redirect URI deliberately selects 
 uv sync --locked --all-groups
 uv run --locked ruff check .
 uv run --locked ruff format --check .
-uv run --locked pytest -m 'not live' --cov=robinhood_mcp --cov-report=term-missing
+uv run --locked pytest -m 'not live' --cov=robinhood_mcp_wrapper --cov-report=term-missing
 uv build --no-sources
 uv run --locked python scripts/check_dist.py
 ```

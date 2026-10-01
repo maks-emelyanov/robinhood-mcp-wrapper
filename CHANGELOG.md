@@ -20,6 +20,11 @@ version section when a release is published.
 
 ### Changed
 
+- Aligned the Python package (`robinhood_mcp_wrapper`), CLI (`robinhood-mcp-wrapper`), and
+  project titles with the repository name. The previous package (`robinhood_mcp`) and CLI
+  (`robinhood-mcp`) have no compatibility aliases; refresh the installation and update imports
+  and commands using the [migration steps](README.md#migrate-an-existing-checkout). Existing
+  environment settings and persisted OAuth credentials are unchanged.
 - Package metadata now declares the MIT license, Python 3.14 support, and the PEP 561 type marker;
   release archives include contributor documentation and verification resources.
 - CLI configuration and JSON input errors now use concise messages, and `--version` reports the

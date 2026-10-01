@@ -44,7 +44,7 @@ Issues = "https://github.com/maks-emelyanov/robinhood-mcp-wrapper/issues"
 Changelog = "https://github.com/maks-emelyanov/robinhood-mcp-wrapper/blob/main/CHANGELOG.md"
 
 [project.scripts]
-robinhood-mcp = "robinhood_mcp.cli:app"
+robinhood-mcp-wrapper = "robinhood_mcp_wrapper.cli:app"
 
 [dependency-groups]
 dev = [
@@ -55,7 +55,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/robinhood_mcp"]
+packages = ["src/robinhood_mcp_wrapper"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -90,4 +90,4 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
 
 [tool.coverage.run]
 branch = true
-source = ["robinhood_mcp"]
+source = ["robinhood_mcp_wrapper"]

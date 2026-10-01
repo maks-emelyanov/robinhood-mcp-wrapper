@@ -12,10 +12,10 @@ from mcp.server import MCPServer
 from mcp.shared.auth import OAuthToken
 from mcp_types import CallToolResult, ListToolsResult, TextContent, Tool
 
-from robinhood_mcp.api import create_app
-from robinhood_mcp.client import RobinhoodMCPClient
-from robinhood_mcp.config import Settings
-from robinhood_mcp.errors import (
+from robinhood_mcp_wrapper.api import create_app
+from robinhood_mcp_wrapper.client import RobinhoodMCPClient
+from robinhood_mcp_wrapper.config import Settings
+from robinhood_mcp_wrapper.errors import (
     AuthenticationRequired,
     AuthFlowConflict,
     CredentialStoreError,
@@ -126,7 +126,9 @@ def test_local_validation_error_maps_to_422() -> None:
 
 def test_openapi_contains_stable_gateway_routes() -> None:
     app = create_app(Settings(), client=FakeClient())  # type: ignore[arg-type]
-    paths = app.openapi()["paths"]
+    schema = app.openapi()
+    assert schema["info"]["title"] == "Robinhood MCP Wrapper"
+    paths = schema["paths"]
     expected = {
         "/healthz",
         "/v1/auth/status",

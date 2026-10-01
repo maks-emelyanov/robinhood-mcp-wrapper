@@ -5,16 +5,20 @@ code. Keep authorization URLs, callback URLs, credential files, API keys, accoun
 and trading data out of shared logs.
 
 ```bash
-uv run --locked robinhood-mcp --version
+uv run --locked robinhood-mcp-wrapper --version
 uv run --locked python --version
 ```
 
 ## Installation and configuration
 
 The project requires Python 3.14. Use `uv sync --locked --all-groups` from the repository root
-and `uv run --locked robinhood-mcp --help` to verify the CLI without authenticating. If a
+and `uv run --locked robinhood-mcp-wrapper --help` to verify the CLI without authenticating. If a
 dependency change makes the lockfile stale, update `uv.lock` deliberately with `uv lock`; do not
 ignore the mismatch during routine installation.
+
+If `robinhood-mcp` is missing or `import robinhood_mcp` fails after updating, follow the
+[rename migration steps](../README.md#migrate-an-existing-checkout). Reinstall the checkout and
+use `robinhood-mcp-wrapper` and `robinhood_mcp_wrapper`; the previous names have no aliases.
 
 `.env` files are not loaded by the wrapper. If an override appears to be ignored, check that
 your shell or process manager exports it. Check the variable name against

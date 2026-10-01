@@ -16,8 +16,8 @@ import anyio
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from platformdirs import user_data_path
 
-from robinhood_mcp.config import Settings
-from robinhood_mcp.errors import CredentialStoreError
+from robinhood_mcp_wrapper.config import Settings
+from robinhood_mcp_wrapper.errors import CredentialStoreError
 
 _FILE_VERSION = 1
 _TOKEN_KEY = "oauth_token"

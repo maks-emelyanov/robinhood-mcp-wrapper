@@ -8,7 +8,7 @@ import os
 from dataclasses import dataclass, fields
 from urllib.parse import ParseResult, urlparse
 
-from robinhood_mcp.errors import ConfigurationError
+from robinhood_mcp_wrapper.errors import ConfigurationError
 
 DEFAULT_MCP_URL = "https://agent.robinhood.com/mcp/trading"
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:8765/oauth/callback"

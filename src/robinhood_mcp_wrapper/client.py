@@ -41,14 +41,14 @@ from mcp_types import (
 )
 from pydantic import AnyUrl
 
-from robinhood_mcp import __version__
-from robinhood_mcp.auth import (
+from robinhood_mcp_wrapper import __version__
+from robinhood_mcp_wrapper.auth import (
     AuthorizationFlow,
     LoopbackCallbackReceiver,
     parse_oauth_callback,
 )
-from robinhood_mcp.config import Settings
-from robinhood_mcp.errors import (
+from robinhood_mcp_wrapper.config import Settings
+from robinhood_mcp_wrapper.errors import (
     AuthenticationRequired,
     AuthFlowConflict,
     InvalidOAuthCallback,
@@ -57,8 +57,8 @@ from robinhood_mcp.errors import (
     UpstreamTimeoutError,
     UpstreamUnavailableError,
 )
-from robinhood_mcp.serialization import to_jsonable
-from robinhood_mcp.storage import CredentialStorage, FileTokenStorage
+from robinhood_mcp_wrapper.serialization import to_jsonable
+from robinhood_mcp_wrapper.storage import CredentialStorage, FileTokenStorage
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -149,7 +149,7 @@ class RobinhoodMCPClient:
             expires_at = datetime.now(UTC) + timedelta(seconds=self.settings.oauth_timeout)
             task = asyncio.create_task(
                 self._run_login(url_future, callback_future),
-                name=f"robinhood-oauth-{flow_id}",
+                name=f"robinhood-mcp-wrapper-oauth-{flow_id}",
             )
             task.add_done_callback(self._consume_auth_task_result)
             active = _ActiveAuthFlow(
@@ -332,7 +332,7 @@ class RobinhoodMCPClient:
             stop = asyncio.Event()
             task = asyncio.create_task(
                 self._run_connection(provider, ready, stop),
-                name="robinhood-mcp-connection",
+                name="robinhood-mcp-wrapper-connection",
             )
             self._connection_task = task
             self._connection_stop = stop

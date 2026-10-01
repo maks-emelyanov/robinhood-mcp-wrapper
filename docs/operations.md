@@ -9,9 +9,9 @@ From the repository root:
 
 ```bash
 uv sync --locked --all-groups
-uv run --locked robinhood-mcp auth login
-uv run --locked robinhood-mcp tools list --refresh
-uv run --locked robinhood-mcp serve
+uv run --locked robinhood-mcp-wrapper auth login
+uv run --locked robinhood-mcp-wrapper tools list --refresh
+uv run --locked robinhood-mcp-wrapper serve
 ```
 
 CLI browser login and the gateway both use port `8765` by default. Finish CLI login before
@@ -40,6 +40,11 @@ URI. If you explicitly reuse `ROBINHOOD_CREDENTIALS_FILE` across changed OAuth s
 the client registration and authenticate again. The file override takes precedence over
 automatic filename separation.
 
+The package and CLI rename preserves the default data directory (`robinhood-mcp-wrapper`),
+credential filename calculation, and file format. Existing credentials are reused when the
+OAuth settings and any file override remain the same. Update service commands using the
+[migration steps](../README.md#migrate-an-existing-checkout).
+
 ## Protect gateway access
 
 Even on loopback, an API key is useful when other local processes should not have unrestricted
@@ -47,7 +52,7 @@ access to the session. Generate a key without placing a literal secret in shell 
 
 ```bash
 export ROBINHOOD_API_KEY="$(uv run --locked python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-uv run --locked robinhood-mcp serve
+uv run --locked robinhood-mcp-wrapper serve
 ```
 
 In another trusted shell, provide the same key through your secret manager or process
@@ -79,7 +84,7 @@ browser receiver accepts HTTP loopback redirects only.
 Print the credential path without opening or exposing its contents:
 
 ```bash
-uv run --locked python -c 'from robinhood_mcp.config import Settings; from robinhood_mcp.storage import FileTokenStorage; print(FileTokenStorage(Settings.from_env()).path)'
+uv run --locked python -c 'from robinhood_mcp_wrapper.config import Settings; from robinhood_mcp_wrapper.storage import FileTokenStorage; print(FileTokenStorage(Settings.from_env()).path)'
 ```
 
 The JSON file contains OAuth tokens and dynamic client registration and is not encrypted.
@@ -92,19 +97,19 @@ does not prove the token is currently accepted by Robinhood. Successful tool dis
 upstream access. The SDK refreshes tokens when supported. To reauthorize deliberately:
 
 ```bash
-uv run --locked robinhood-mcp auth login --force
+uv run --locked robinhood-mcp-wrapper auth login --force
 ```
 
 To remove tokens while retaining client registration:
 
 ```bash
-uv run --locked robinhood-mcp auth logout
+uv run --locked robinhood-mcp-wrapper auth logout
 ```
 
 To remove tokens and registration:
 
 ```bash
-uv run --locked robinhood-mcp auth logout --forget-client
+uv run --locked robinhood-mcp-wrapper auth logout --forget-client
 ```
 
 These commands remove local state only. Revoke upstream authorization using the controls

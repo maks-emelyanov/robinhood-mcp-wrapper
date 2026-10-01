@@ -16,7 +16,7 @@ or clone it directly to explore the project:
 git clone https://github.com/maks-emelyanov/robinhood-mcp-wrapper.git
 cd robinhood-mcp-wrapper
 uv sync --locked --all-groups
-uv run --locked robinhood-mcp --help
+uv run --locked robinhood-mcp-wrapper --help
 ```
 
 No account or credentials are required to develop with the local test fixtures. Configuration
@@ -39,7 +39,7 @@ Run the same checks used by CI:
 ```bash
 uv run --locked ruff check .
 uv run --locked ruff format --check .
-uv run --locked pytest -m 'not live' --cov=robinhood_mcp --cov-report=term-missing
+uv run --locked pytest -m 'not live' --cov=robinhood_mcp_wrapper --cov-report=term-missing
 uv build --no-sources
 uv run --locked python scripts/check_dist.py
 ```

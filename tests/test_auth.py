@@ -6,10 +6,10 @@ import pytest
 from mcp.client.auth import AuthorizationCodeResult
 from mcp.shared.auth import OAuthToken
 
-from robinhood_mcp.auth import LoopbackCallbackReceiver, parse_oauth_callback
-from robinhood_mcp.client import RobinhoodMCPClient
-from robinhood_mcp.config import Settings
-from robinhood_mcp.errors import AuthFlowConflict, ConfigurationError, InvalidOAuthCallback
+from robinhood_mcp_wrapper.auth import LoopbackCallbackReceiver, parse_oauth_callback
+from robinhood_mcp_wrapper.client import RobinhoodMCPClient
+from robinhood_mcp_wrapper.config import Settings
+from robinhood_mcp_wrapper.errors import AuthFlowConflict, ConfigurationError, InvalidOAuthCallback
 
 REDIRECT = "http://127.0.0.1:8765/oauth/callback"
 

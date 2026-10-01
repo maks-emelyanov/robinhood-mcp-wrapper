@@ -6,10 +6,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from robinhood_mcp import __version__, cli
+from robinhood_mcp_wrapper import __version__, cli
 
 
 def test_cli_help_lists_all_command_groups() -> None:
+    assert cli.app.info.name == "robinhood-mcp-wrapper"
     result = CliRunner().invoke(cli.app, ["--help"])
     assert result.exit_code == 0
     for command in ("auth", "tools", "resources", "prompts", "serve"):

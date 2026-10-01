@@ -9,9 +9,9 @@ import pytest
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
 
-from robinhood_mcp.config import Settings
-from robinhood_mcp.errors import CredentialStoreError
-from robinhood_mcp.storage import (
+from robinhood_mcp_wrapper.config import Settings
+from robinhood_mcp_wrapper.errors import CredentialStoreError
+from robinhood_mcp_wrapper.storage import (
     FileTokenStorage,
     credential_fingerprint,
     default_credentials_file,

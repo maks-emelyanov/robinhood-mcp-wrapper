@@ -1,4 +1,4 @@
-"""Command-line interface for the Robinhood MCP wrapper."""
+"""Command-line interface for Robinhood MCP Wrapper."""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ import typer
 import uvicorn
 from mcp_types import PromptReference, ResourceTemplateReference
 
-from robinhood_mcp import __version__
-from robinhood_mcp.api import create_app
-from robinhood_mcp.client import RobinhoodMCPClient
-from robinhood_mcp.config import Settings
-from robinhood_mcp.errors import RobinhoodMCPError
-from robinhood_mcp.serialization import to_jsonable
+from robinhood_mcp_wrapper import __version__
+from robinhood_mcp_wrapper.api import create_app
+from robinhood_mcp_wrapper.client import RobinhoodMCPClient
+from robinhood_mcp_wrapper.config import Settings
+from robinhood_mcp_wrapper.errors import RobinhoodMCPError
+from robinhood_mcp_wrapper.serialization import to_jsonable
 
-app = typer.Typer(no_args_is_help=True, help="Robinhood Agentic Trading MCP wrapper")
+app = typer.Typer(name="robinhood-mcp-wrapper", no_args_is_help=True, help="Robinhood MCP Wrapper")
 auth_app = typer.Typer(no_args_is_help=True, help="Manage Robinhood OAuth credentials")
 tools_app = typer.Typer(no_args_is_help=True, help="Discover and call MCP tools")
 resources_app = typer.Typer(no_args_is_help=True, help="List and read MCP resources")
@@ -60,7 +60,7 @@ def main(
         help="Show the installed wrapper version and exit",
     ),
 ) -> None:
-    """Robinhood Agentic Trading MCP wrapper."""
+    """Robinhood MCP Wrapper."""
 
 
 def _print(value: Any) -> None:

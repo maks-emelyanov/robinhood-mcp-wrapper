@@ -1,4 +1,4 @@
-"""FastAPI gateway for the Robinhood MCP client."""
+"""FastAPI gateway for Robinhood MCP Wrapper."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from fastapi.security import HTTPBearer
 from mcp_types import CompletionArgument, PromptReference, ResourceTemplateReference
 from pydantic import BaseModel, ConfigDict, Field
 
-from robinhood_mcp import __version__
-from robinhood_mcp.client import RobinhoodMCPClient
-from robinhood_mcp.config import Settings
-from robinhood_mcp.errors import (
+from robinhood_mcp_wrapper import __version__
+from robinhood_mcp_wrapper.client import RobinhoodMCPClient
+from robinhood_mcp_wrapper.config import Settings
+from robinhood_mcp_wrapper.errors import (
     AuthenticationRequired,
     AuthFlowConflict,
     CredentialStoreError,
@@ -30,7 +30,7 @@ from robinhood_mcp.errors import (
     UpstreamTimeoutError,
     UpstreamUnavailableError,
 )
-from robinhood_mcp.serialization import to_jsonable
+from robinhood_mcp_wrapper.serialization import to_jsonable
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ def create_app(
                 await shared_client.close()
 
     app = FastAPI(
-        title="Robinhood Agentic Trading MCP Wrapper",
+        title="Robinhood MCP Wrapper",
         version=__version__,
         description=(
             "A generic typed gateway to Robinhood's Agentic Trading MCP server. "

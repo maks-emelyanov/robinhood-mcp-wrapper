@@ -19,9 +19,9 @@ from mcp_types import (
     ResourceTemplateReference,
 )
 
-from robinhood_mcp.client import RobinhoodMCPClient
-from robinhood_mcp.config import Settings
-from robinhood_mcp.errors import (
+from robinhood_mcp_wrapper.client import RobinhoodMCPClient
+from robinhood_mcp_wrapper.config import Settings
+from robinhood_mcp_wrapper.errors import (
     AuthenticationRequired,
     ToolValidationError,
     UpstreamMCPError,
@@ -79,7 +79,7 @@ def test_robinhood_transport_skips_unsupported_session_delete(
         return sentinel
 
     monkeypatch.setattr(
-        "robinhood_mcp.client.streamable_http_client",
+        "robinhood_mcp_wrapper.client.streamable_http_client",
         fake_streamable_http_client,
     )
     http_client = object()

@@ -33,10 +33,12 @@ def check_archives(directory: Path, name: str, version: str) -> Path:
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
         info = f"{stem}.dist-info"
-        require("robinhood_mcp/py.typed" in names, "Wheel is missing the PEP 561 type marker.")
+        require(
+            "robinhood_mcp_wrapper/py.typed" in names, "Wheel is missing the PEP 561 type marker."
+        )
         require(f"{info}/licenses/LICENSE" in names, "Wheel is missing the MIT license file.")
         require(
-            all(path.startswith(("robinhood_mcp/", f"{info}/")) for path in names),
+            all(path.startswith(("robinhood_mcp_wrapper/", f"{info}/")) for path in names),
             "Wheel contains files outside the package and its metadata.",
         )
         metadata = email.message_from_bytes(archive.read(f"{info}/METADATA"))
@@ -46,7 +48,7 @@ def check_archives(directory: Path, name: str, version: str) -> Path:
         require(metadata["Requires-Python"] == ">=3.14", "Wheel Python requirement is incorrect.")
         require(bool(metadata.get_all("Requires-Dist")), "Wheel has no runtime dependencies.")
         require(
-            "robinhood-mcp = robinhood_mcp.cli:app"
+            "robinhood-mcp-wrapper = robinhood_mcp_wrapper.cli:app"
             in archive.read(f"{info}/entry_points.txt").decode(),
             "Wheel is missing its CLI entry point.",
         )
@@ -67,7 +69,7 @@ def check_archives(directory: Path, name: str, version: str) -> Path:
             "docs/troubleshooting.md",
             "docs/maintaining.md",
             "examples/discover_tools.py",
-            "src/robinhood_mcp/py.typed",
+            "src/robinhood_mcp_wrapper/py.typed",
             "scripts/check_dist.py",
         }
         require(required <= names, f"Sdist is missing required files: {required - names}")
@@ -87,7 +89,7 @@ def check_archives(directory: Path, name: str, version: str) -> Path:
 
 
 def smoke_test(wheel: Path, project: Path, version: str) -> None:
-    with tempfile.TemporaryDirectory(prefix="robinhood-dist-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="robinhood-mcp-wrapper-dist-") as temporary:
         directory = Path(temporary)
         smoke_env = {
             key: value
@@ -140,18 +142,20 @@ import importlib.metadata
 import importlib.resources
 import pathlib
 import sys
-import robinhood_mcp
-from robinhood_mcp.api import create_app
+import robinhood_mcp_wrapper
+from robinhood_mcp_wrapper.api import create_app
 
-assert pathlib.Path(robinhood_mcp.__file__).is_relative_to(pathlib.Path(sys.prefix))
-assert robinhood_mcp.__version__ == importlib.metadata.version("robinhood-mcp-wrapper")
-assert importlib.resources.files("robinhood_mcp").joinpath("py.typed").is_file()
+assert pathlib.Path(robinhood_mcp_wrapper.__file__).is_relative_to(pathlib.Path(sys.prefix))
+assert robinhood_mcp_wrapper.__version__ == importlib.metadata.version("robinhood-mcp-wrapper")
+assert importlib.resources.files("robinhood_mcp_wrapper").joinpath("py.typed").is_file()
 assert any(route.path == "/healthz" for route in create_app().routes)
 print("Installed wheel imports, version, type marker, and API factory passed.")
 """
         subprocess.run([str(python), "-I", "-c", code], cwd=directory, env=smoke_env, check=True)
-        cli = executables / ("robinhood-mcp.exe" if os.name == "nt" else "robinhood-mcp")
-        for command in ([str(cli)], [str(python), "-I", "-m", "robinhood_mcp"]):
+        cli = executables / (
+            "robinhood-mcp-wrapper.exe" if os.name == "nt" else "robinhood-mcp-wrapper"
+        )
+        for command in ([str(cli)], [str(python), "-I", "-m", "robinhood_mcp_wrapper"]):
             subprocess.run(
                 [*command, "--help"],
                 cwd=directory,

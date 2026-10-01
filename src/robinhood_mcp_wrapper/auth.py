@@ -12,8 +12,8 @@ from urllib.parse import ParseResult, parse_qs, urlparse
 
 from mcp.client.auth import AuthorizationCodeResult
 
-from robinhood_mcp.config import is_loopback_host
-from robinhood_mcp.errors import ConfigurationError, InvalidOAuthCallback
+from robinhood_mcp_wrapper.config import is_loopback_host
+from robinhood_mcp_wrapper.errors import ConfigurationError, InvalidOAuthCallback
 
 
 def _origin(parsed: ParseResult) -> tuple[str, str, int | None]:
@@ -151,7 +151,7 @@ class LoopbackCallbackReceiver:
             pass
 
         body = (
-            "<!doctype html><html><head><meta charset='utf-8'><title>Robinhood MCP</title>"
+            "<!doctype html><html><head><meta charset='utf-8'><title>Robinhood MCP Wrapper</title>"
             f"</head><body><p>{html.escape(title)}</p></body></html>"
         ).encode()
         writer.write(
