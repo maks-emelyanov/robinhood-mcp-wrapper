@@ -3,14 +3,41 @@
 from __future__ import annotations
 
 import ipaddress
+import math
 import os
 from dataclasses import dataclass, fields
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 from robinhood_mcp.errors import ConfigurationError
 
 DEFAULT_MCP_URL = "https://agent.robinhood.com/mcp/trading"
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:8765/oauth/callback"
+
+
+def _validated_url(value: str, name: str, schemes: set[str]) -> ParseResult:
+    """Reject malformed URLs before they reach OAuth or the HTTP transport."""
+
+    try:
+        parsed = urlparse(value)
+        valid = (
+            parsed.scheme in schemes
+            and bool(parsed.hostname)
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.fragment
+            and not any(character.isspace() or ord(character) < 32 for character in value)
+        )
+        # Accessing port also validates its range and numeric representation.
+        if parsed.port == 0:
+            valid = False
+    except ValueError as exc:
+        raise ConfigurationError(f"{name} must be a valid HTTP(S) URL") from exc
+    if not valid:
+        scheme_label = "HTTPS" if schemes == {"https"} else "HTTP(S)"
+        raise ConfigurationError(
+            f"{name} must be a valid {scheme_label} URL without credentials or a fragment"
+        )
+    return parsed
 
 
 def _env_float(name: str, default: float) -> float:
@@ -88,18 +115,33 @@ class Settings:
         return settings
 
     def validate(self) -> None:
-        mcp = urlparse(self.mcp_url)
-        if mcp.scheme != "https" or not mcp.netloc:
-            raise ConfigurationError("ROBINHOOD_MCP_URL must be an HTTPS URL")
-        redirect = urlparse(self.redirect_uri)
-        if redirect.scheme not in {"http", "https"} or not redirect.hostname:
-            raise ConfigurationError("ROBINHOOD_MCP_REDIRECT_URI must be an HTTP(S) URL")
+        _validated_url(self.mcp_url, "ROBINHOOD_MCP_URL", {"https"})
+        redirect = _validated_url(
+            self.redirect_uri, "ROBINHOOD_MCP_REDIRECT_URI", {"http", "https"}
+        )
+        if redirect.query or redirect.params:
+            raise ConfigurationError(
+                "ROBINHOOD_MCP_REDIRECT_URI must not contain a query or path parameters"
+            )
         if redirect.scheme == "http" and not is_loopback_host(redirect.hostname):
             raise ConfigurationError("An HTTP OAuth redirect must use a loopback host")
         if not 1 <= self.port <= 65535:
             raise ConfigurationError("ROBINHOOD_API_PORT must be between 1 and 65535")
-        if min(self.connect_timeout, self.read_timeout, self.oauth_timeout) <= 0:
-            raise ConfigurationError("Timeouts must be greater than zero")
+        timeouts = (self.connect_timeout, self.read_timeout, self.oauth_timeout)
+        if any(not math.isfinite(value) or value <= 0 for value in timeouts):
+            raise ConfigurationError("Timeouts must be finite numbers greater than zero")
+        if not self.client_name.strip():
+            raise ConfigurationError("ROBINHOOD_MCP_CLIENT_NAME must not be empty")
+        if not self.host.strip() or any(character.isspace() for character in self.host):
+            raise ConfigurationError(
+                "ROBINHOOD_API_HOST must be a non-empty hostname or IP address"
+            )
+        if self.api_key is not None and not self.api_key.strip():
+            raise ConfigurationError("ROBINHOOD_API_KEY must not be blank")
+        if self.log_level.upper() not in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "TRACE"}:
+            raise ConfigurationError(
+                "ROBINHOOD_LOG_LEVEL must be CRITICAL, ERROR, WARNING, INFO, DEBUG, or TRACE"
+            )
 
     def validate_server_binding(self) -> None:
         if not is_loopback_host(self.host) and not self.api_key:

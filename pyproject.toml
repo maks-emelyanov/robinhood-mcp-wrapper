@@ -8,18 +8,40 @@ version = "0.1.0"
 description = "A typed Python, REST, and CLI wrapper for Robinhood Agentic Trading MCP"
 readme = "README.md"
 requires-python = ">=3.14"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Robinhood MCP Wrapper contributors" }]
+keywords = ["robinhood", "mcp", "oauth", "fastapi", "trading"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
 dependencies = [
+    "anyio>=4.10,<5",
     "fastapi>=0.115,<1",
     "httpx2>=2.5,<3",
     "jsonschema>=4.23,<5",
     "mcp>=2.2,<3",
+    "mcp-types>=2.2,<3",
     "platformdirs>=4.3,<5",
     "pydantic>=2.12,<3",
     "typer>=0.16,<1",
     "uvicorn>=0.31,<1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/maks-emelyanov/robinhood-mcp-wrapper"
+Repository = "https://github.com/maks-emelyanov/robinhood-mcp-wrapper"
+Documentation = "https://github.com/maks-emelyanov/robinhood-mcp-wrapper#readme"
+Issues = "https://github.com/maks-emelyanov/robinhood-mcp-wrapper/issues"
+Changelog = "https://github.com/maks-emelyanov/robinhood-mcp-wrapper/blob/main/CHANGELOG.md"
 
 [project.scripts]
 robinhood-mcp = "robinhood_mcp.cli:app"
@@ -34,6 +56,25 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/robinhood_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/examples",
+    "/scripts",
+    "/docs",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/CONTRIBUTING.md",
+    "/CODE_OF_CONDUCT.md",
+    "/SECURITY.md",
+    "/pyproject.toml",
+    "/uv.lock",
+    "/.python-version",
+    "/.env.example",
+]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-markers --strict-config"

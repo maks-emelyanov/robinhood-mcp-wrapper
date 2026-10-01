@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import secrets
 import uuid
 import webbrowser
 from collections.abc import Awaitable, Callable
@@ -12,6 +13,7 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
+from urllib.parse import parse_qs, urlparse
 
 import anyio
 import httpx2
@@ -22,6 +24,8 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.auth import OAuthClientMetadata
 from mcp.shared.exceptions import MCPError
 from mcp_types import (
+    CONNECTION_CLOSED,
+    REQUEST_TIMEOUT,
     CallToolResult,
     CompleteResult,
     GetPromptResult,
@@ -33,6 +37,7 @@ from mcp_types import (
     PromptReference,
     ReadResourceResult,
     ResourceTemplateReference,
+    Tool,
 )
 from pydantic import AnyUrl
 
@@ -82,7 +87,8 @@ class RobinhoodMCPClient:
         self.storage = storage or FileTokenStorage(self.settings)
         self._connection_lock = asyncio.Lock()
         self._auth_lock = asyncio.Lock()
-        self._stack: AsyncExitStack | None = None
+        self._connection_task: asyncio.Task[None] | None = None
+        self._connection_stop: asyncio.Event | None = None
         self._client: Client | None = None
         self._active_auth: _ActiveAuthFlow | None = None
 
@@ -227,6 +233,11 @@ class RobinhoodMCPClient:
             if active.flow_id != flow_id:
                 raise InvalidOAuthCallback("Callback flow ID does not match the active flow")
             result = parse_oauth_callback(callback_url, self.settings.redirect_uri)
+            expected_state = parse_qs(urlparse(active.url_future.result()).query).get("state")
+            if not expected_state or not secrets.compare_digest(
+                result.state.encode(), expected_state[0].encode()
+            ):
+                raise InvalidOAuthCallback("Callback state does not match the active flow")
             if active.callback_future.done():
                 raise AuthFlowConflict("The authorization callback was already submitted")
             active.callback_future.set_result(result)
@@ -317,44 +328,121 @@ class RobinhoodMCPClient:
                 redirect_handler=redirect_handler,
                 callback_handler=callback_handler,
             )
-            stack = AsyncExitStack()
+            ready: asyncio.Future[Client] = asyncio.get_running_loop().create_future()
+            stop = asyncio.Event()
+            task = asyncio.create_task(
+                self._run_connection(provider, ready, stop),
+                name="robinhood-mcp-connection",
+            )
+            self._connection_task = task
+            self._connection_stop = stop
+            task.add_done_callback(self._connection_finished)
             try:
+                client = await asyncio.shield(ready)
+                if task.done():
+                    await task
+                    raise UpstreamUnavailableError("MCP connection closed during startup")
+            except BaseException as exc:
+                stop.set()
+                if isinstance(exc, asyncio.CancelledError):
+                    task.cancel()
+                with contextlib.suppress(Exception, asyncio.CancelledError):
+                    await asyncio.shield(task)
+                self._connection_task = None
+                self._connection_stop = None
+                # Retrieve a startup error if the caller was cancelled before
+                # the connection owner could publish it.
+                if ready.done() and not ready.cancelled():
+                    ready.exception()
+                self._raise_upstream_error(exc)
+                raise
+            self._client = client
+
+    async def _run_connection(
+        self,
+        provider: OAuthClientProvider,
+        ready: asyncio.Future[Client],
+        stop: asyncio.Event,
+    ) -> None:
+        """Enter and exit SDK task groups in the same task across REST requests."""
+
+        try:
+            async with AsyncExitStack() as stack:
                 http_client = await stack.enter_async_context(self._http_client(provider))
-                transport = self._transport(http_client)
                 client = await stack.enter_async_context(
                     Client(
-                        transport,
+                        self._transport(http_client),
                         mode="auto",
                         read_timeout_seconds=self.settings.read_timeout,
                         client_info=Implementation(
-                            name="robinhood-mcp-wrapper",
-                            version=__version__,
+                            name="robinhood-mcp-wrapper", version=__version__
                         ),
                     )
                 )
-            except AuthenticationRequired:
-                await stack.aclose()
-                raise
-            except OAuthFlowError as exc:
-                await stack.aclose()
-                raise AuthenticationRequired("Stored credentials could not be refreshed") from exc
-            except httpx2.TimeoutException as exc:
-                await stack.aclose()
-                raise UpstreamTimeoutError("Timed out connecting to Robinhood MCP") from exc
-            except (httpx2.HTTPError, OSError) as exc:
-                await stack.aclose()
-                raise UpstreamUnavailableError("Unable to connect to Robinhood MCP") from exc
-            self._stack = stack
-            self._client = client
+                ready.set_result(client)
+                await stop.wait()
+        except BaseException as exc:
+            if not ready.done():
+                ready.set_exception(exc)
+            raise
+
+    def _connection_finished(self, task: asyncio.Task[None]) -> None:
+        if self._connection_task is task:
+            self._client = None
+        if not task.cancelled():
+            task.exception()
 
     async def close(self) -> None:
         async with self._connection_lock:
-            stack = self._stack
-            self._stack = None
+            task = self._connection_task
+            stop = self._connection_stop
+            self._connection_task = None
+            self._connection_stop = None
             self._client = None
-            if stack is not None:
-                with contextlib.suppress(Exception):
-                    await stack.aclose()
+            if task is not None:
+                if stop is not None:
+                    stop.set()
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    current = asyncio.current_task()
+                    if current is not None and current.cancelling():
+                        # Finish shutdown before propagating caller cancellation.
+                        with contextlib.suppress(Exception, asyncio.CancelledError):
+                            await asyncio.shield(task)
+                        raise
+                except Exception:
+                    logger.warning("MCP session cleanup failed")
+
+    @staticmethod
+    def _raise_upstream_error(exc: BaseException) -> None:
+        if isinstance(exc, OAuthFlowError):
+            raise AuthenticationRequired("Stored credentials require reauthorization") from exc
+        if isinstance(exc, (httpx2.TimeoutException, TimeoutError)) or (
+            isinstance(exc, MCPError) and exc.code == REQUEST_TIMEOUT
+        ):
+            raise UpstreamTimeoutError("Robinhood MCP request timed out") from exc
+        if isinstance(
+            exc,
+            (
+                httpx2.HTTPError,
+                OSError,
+                anyio.BrokenResourceError,
+                anyio.ClosedResourceError,
+                anyio.EndOfStream,
+            ),
+        ) or (isinstance(exc, MCPError) and exc.code == CONNECTION_CLOSED):
+            raise UpstreamUnavailableError("Robinhood MCP connection failed") from exc
+        if isinstance(exc, MCPError):
+            raise UpstreamMCPError(
+                "Robinhood MCP returned a protocol error", details=to_jsonable(exc.error)
+            ) from exc
+        if isinstance(exc, BaseExceptionGroup):
+            # SDK task groups can wrap transport/authentication failures.
+            for child in exc.exceptions:
+                if isinstance(child, AuthenticationRequired):
+                    raise child from exc
+                RobinhoodMCPClient._raise_upstream_error(child)
 
     async def _invalidate_connection(self) -> None:
         await self.close()
@@ -369,17 +457,13 @@ class RobinhoodMCPClient:
         except AuthenticationRequired:
             await self._invalidate_connection()
             raise
-        except httpx2.TimeoutException as exc:
-            await self._invalidate_connection()
-            raise UpstreamTimeoutError("Robinhood MCP request timed out") from exc
-        except MCPError as exc:
-            raise UpstreamMCPError(
-                "Robinhood MCP returned a protocol error",
-                details=to_jsonable(getattr(exc, "error", None)),
-            ) from exc
-        except (httpx2.HTTPError, OSError, anyio.BrokenResourceError, anyio.EndOfStream) as exc:
-            await self._invalidate_connection()
-            raise UpstreamUnavailableError("Robinhood MCP connection failed") from exc
+        except Exception as exc:
+            try:
+                self._raise_upstream_error(exc)
+            except AuthenticationRequired, UpstreamTimeoutError, UpstreamUnavailableError:
+                await self._invalidate_connection()
+                raise
+            raise
 
     async def server_metadata(self) -> dict[str, Any]:
         async def operation(client: Client) -> dict[str, Any]:
@@ -402,8 +486,8 @@ class RobinhoodMCPClient:
             )
         )
 
-    async def list_all_tools(self, *, refresh: bool = False) -> list[Any]:
-        tools: list[Any] = []
+    async def list_all_tools(self, *, refresh: bool = False) -> list[Tool]:
+        tools: list[Tool] = []
         cursor: str | None = None
         seen: set[str] = set()
         while True:
@@ -416,7 +500,7 @@ class RobinhoodMCPClient:
                 raise UpstreamMCPError("Robinhood MCP repeated a pagination cursor")
             seen.add(cursor)
 
-    async def refresh_tools(self) -> list[Any]:
+    async def refresh_tools(self) -> list[Tool]:
         return await self.list_all_tools(refresh=True)
 
     async def _validate_tool_arguments(self, name: str, arguments: dict[str, Any]) -> None:

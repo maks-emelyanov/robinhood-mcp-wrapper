@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -91,3 +92,46 @@ def test_fingerprint_changes_with_registration_metadata() -> None:
     assert base != credential_fingerprint(
         Settings(redirect_uri="http://127.0.0.1:9999/oauth/callback")
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("dangling", [False, True])
+async def test_symlink_credentials_are_rejected(tmp_path: Path, dangling: bool) -> None:
+    target = tmp_path / "target.json"
+    if not dangling:
+        target.write_text('{"version": 1}', encoding="utf-8")
+    path = tmp_path / "oauth.json"
+    path.symlink_to(target)
+    storage = FileTokenStorage(Settings(), path=path)
+    for operation in (
+        storage.get_tokens,
+        storage.clear_tokens,
+        storage.clear_all,
+    ):
+        with pytest.raises(CredentialStoreError, match="symbolic link"):
+            await operation()
+    with pytest.raises(CredentialStoreError, match="symbolic link"):
+        await storage.set_tokens(OAuthToken(access_token="secret"))
+    assert path.is_symlink()
+
+
+@pytest.mark.anyio
+async def test_non_regular_credentials_are_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "oauth.json"
+    path.mkdir()
+    storage = FileTokenStorage(Settings(), path=path)
+    with pytest.raises(CredentialStoreError, match="regular file"):
+        await storage.get_tokens()
+
+
+@pytest.mark.anyio
+async def test_storage_works_without_fchmod(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delattr(os, "fchmod", raising=False)
+    path = tmp_path / "oauth.json"
+    storage = FileTokenStorage(Settings(), path=path)
+    await storage.set_tokens(OAuthToken(access_token="access"))
+    path.chmod(0o644)
+    assert (await storage.get_tokens()).access_token == "access"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600

@@ -6,12 +6,13 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import typer
 import uvicorn
 from mcp_types import PromptReference, ResourceTemplateReference
 
+from robinhood_mcp import __version__
 from robinhood_mcp.api import create_app
 from robinhood_mcp.client import RobinhoodMCPClient
 from robinhood_mcp.config import Settings
@@ -30,7 +31,36 @@ app.add_typer(prompts_app, name="prompts")
 
 
 def _settings(**overrides: object) -> Settings:
-    return Settings.from_env(**overrides)
+    try:
+        return Settings.from_env(**overrides)
+    except RobinhoodMCPError as exc:
+        _exit_on_error(exc)
+
+
+def _exit_on_error(exc: RobinhoodMCPError) -> NoReturn:
+    typer.echo(f"Error [{exc.code}]: {exc.message}", err=True)
+    if exc.details is not None:
+        typer.echo(json.dumps(to_jsonable(exc.details), indent=2), err=True)
+    raise typer.Exit(1) from exc
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the installed wrapper version and exit",
+    ),
+) -> None:
+    """Robinhood Agentic Trading MCP wrapper."""
 
 
 def _print(value: Any) -> None:
@@ -40,10 +70,17 @@ def _print(value: Any) -> None:
 def _json_object(value: str | None) -> dict[str, Any]:
     if not value:
         return {}
-    raw = Path(value[1:]).read_text() if value.startswith("@") else value
     try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
+        raw = Path(value[1:]).read_text(encoding="utf-8") if value.startswith("@") else value
+    except (OSError, UnicodeError) as exc:
+        raise typer.BadParameter("JSON arguments file must be a readable UTF-8 file") from exc
+
+    def reject_constant(constant: str) -> None:
+        raise ValueError(f"{constant} is not a valid JSON number")
+
+    try:
+        parsed = json.loads(raw, parse_constant=reject_constant)
+    except ValueError as exc:
         raise typer.BadParameter(f"Invalid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         raise typer.BadParameter("JSON arguments must be an object")
@@ -54,10 +91,7 @@ def _run(awaitable: Any) -> Any:
     try:
         return asyncio.run(awaitable)
     except RobinhoodMCPError as exc:
-        typer.echo(f"Error [{exc.code}]: {exc.message}", err=True)
-        if exc.details is not None:
-            typer.echo(json.dumps(to_jsonable(exc.details), indent=2), err=True)
-        raise typer.Exit(1) from exc
+        _exit_on_error(exc)
 
 
 @auth_app.command("login")
@@ -227,9 +261,12 @@ def serve(
     port: int | None = typer.Option(None, help="REST bind port"),
 ) -> None:
     settings = _settings(host=host, port=port)
-    settings.validate_server_binding()
+    try:
+        settings.validate_server_binding()
+    except RobinhoodMCPError as exc:
+        _exit_on_error(exc)
     logging.basicConfig(
-        level=getattr(logging, settings.log_level, logging.INFO),
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     uvicorn.run(
@@ -238,4 +275,7 @@ def serve(
         port=settings.port,
         workers=1,
         log_level=settings.log_level.lower(),
+        # Uvicorn's access log includes OAuth callback codes in query strings.
+        # The gateway middleware already logs request paths without queries.
+        access_log=False,
     )

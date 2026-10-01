@@ -652,10 +652,12 @@ name = "robinhood-mcp-wrapper"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "fastapi" },
     { name = "httpx2" },
     { name = "jsonschema" },
     { name = "mcp" },
+    { name = "mcp-types" },
     { name = "platformdirs" },
     { name = "pydantic" },
     { name = "typer" },
@@ -672,10 +674,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.10,<5" },
     { name = "fastapi", specifier = ">=0.115,<1" },
     { name = "httpx2", specifier = ">=2.5,<3" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mcp", specifier = ">=2.2,<3" },
+    { name = "mcp-types", specifier = ">=2.2,<3" },
     { name = "platformdirs", specifier = ">=4.3,<5" },
     { name = "pydantic", specifier = ">=2.12,<3" },
     { name = "typer", specifier = ">=0.16,<1" },

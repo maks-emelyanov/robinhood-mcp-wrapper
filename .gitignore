@@ -6,14 +6,30 @@ dist/
 wheels/
 *.egg-info
 .coverage
+.coverage.*
+coverage.xml
+test-results.xml
 htmlcov/
 .pytest_cache/
 .ruff_cache/
 
 # Virtual environments
 .venv
+venv/
 
 # Local configuration and secrets
 .env
 .env.*
 !.env.example
+credentials-*.json
+robinhood-credentials*.json
+*.pem
+*.key
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

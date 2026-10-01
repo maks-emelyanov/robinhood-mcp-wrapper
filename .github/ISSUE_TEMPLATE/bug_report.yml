@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible problem with the library, CLI, or REST gateway.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read SECURITY.md for vulnerability reporting. Use synthetic data in public reports.
+        Remove OAuth tokens, authorization/callback URLs, API keys, account identifiers,
+        positions, and order details from commands, logs, and screenshots.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and expected behavior
+      description: Describe what happened and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include a minimal command or code sample using synthetic data.
+      placeholder: |
+        1. Install the locked environment.
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Python and uv versions, and the package version or commit.
+      placeholder: |
+        OS:
+        Python:
+        uv:
+        Package version / commit:
+        Interface: library / CLI / REST
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized error output
+      description: Include the traceback or structured error after removing private data.
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Public report check
+      options:
+        - label: I removed credentials and personal account/trading data from this report.
+          required: true

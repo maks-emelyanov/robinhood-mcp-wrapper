@@ -10,9 +10,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
-from fastapi import FastAPI, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from mcp_types import PromptReference, ResourceTemplateReference
+from fastapi.security import HTTPBearer
+from mcp_types import CompletionArgument, PromptReference, ResourceTemplateReference
 from pydantic import BaseModel, ConfigDict, Field
 
 from robinhood_mcp import __version__
@@ -60,7 +61,7 @@ class CompletionRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     ref: dict[str, Any]
-    argument: dict[str, str]
+    argument: CompletionArgument
     context_arguments: dict[str, str] | None = Field(default=None, alias="contextArguments")
 
     def parsed_ref(self) -> PromptReference | ResourceTemplateReference:
@@ -108,9 +109,13 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        await shared_client.cancel_login()
-        await shared_client.close()
+        try:
+            yield
+        finally:
+            try:
+                await shared_client.cancel_login()
+            finally:
+                await shared_client.close()
 
     app = FastAPI(
         title="Robinhood Agentic Trading MCP Wrapper",
@@ -123,6 +128,9 @@ def create_app(
     )
     app.state.robinhood_client = shared_client
     app.state.settings = resolved_settings
+    router = APIRouter(
+        dependencies=[Depends(HTTPBearer(auto_error=False))] if resolved_settings.api_key else []
+    )
 
     @app.middleware("http")
     async def access_control_and_logging(request: Request, call_next: Any) -> Any:
@@ -133,8 +141,8 @@ def create_app(
             header = request.headers.get("authorization", "")
             scheme, _, supplied = header.partition(" ")
             valid = scheme.lower() == "bearer" and secrets.compare_digest(
-                supplied,
-                resolved_settings.api_key,
+                supplied.encode(),
+                resolved_settings.api_key.encode(),
             )
             if not valid:
                 return JSONResponse(
@@ -167,11 +175,11 @@ def create_app(
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/v1/auth/status", tags=["authentication"])
+    @router.get("/v1/auth/status", tags=["authentication"])
     async def auth_status() -> dict[str, Any]:
         return await shared_client.auth_status()
 
-    @app.post("/v1/auth/start", tags=["authentication"])
+    @router.post("/v1/auth/start", tags=["authentication"])
     async def auth_start(body: AuthStartRequest) -> dict[str, Any]:
         flow = await shared_client.start_login(force=body.force)
         return {
@@ -181,7 +189,7 @@ def create_app(
             "expires_at": flow.expires_at.isoformat(),
         }
 
-    @app.post("/v1/auth/complete", tags=["authentication"])
+    @router.post("/v1/auth/complete", tags=["authentication"])
     async def auth_complete(body: AuthCompleteRequest) -> dict[str, Any]:
         await shared_client.complete_login(body.flow_id, body.callback_url)
         await shared_client.connect()
@@ -201,7 +209,7 @@ def create_app(
             return HTMLResponse("Authorization could not be completed.", status_code=400)
         return HTMLResponse("Authorization complete. You can close this window.")
 
-    @app.delete("/v1/auth/session", tags=["authentication"])
+    @router.delete("/v1/auth/session", tags=["authentication"])
     async def auth_delete(
         forget_client: Annotated[bool, Query(alias="forgetClient")] = False,
     ) -> dict[str, Any]:
@@ -211,29 +219,29 @@ def create_app(
             await shared_client.logout()
         return await shared_client.auth_status()
 
-    @app.get("/v1/mcp", tags=["mcp"])
+    @router.get("/v1/mcp", tags=["mcp"])
     async def mcp_metadata() -> dict[str, Any]:
         return await shared_client.server_metadata()
 
-    @app.get("/v1/tools", tags=["tools"])
+    @router.get("/v1/tools", tags=["tools"])
     async def list_tools(
         cursor: str | None = None,
         refresh: bool = False,
     ) -> dict[str, Any]:
         return to_jsonable(await shared_client.list_tools(cursor=cursor, refresh=refresh))
 
-    @app.post("/v1/tools/{name}/call", tags=["tools"])
+    @router.post("/v1/tools/{name}/call", tags=["tools"])
     async def call_tool(name: str, body: ToolCallRequest) -> dict[str, Any]:
         return to_jsonable(await shared_client.call_tool(name, body.arguments))
 
-    @app.get("/v1/resources", tags=["resources"])
+    @router.get("/v1/resources", tags=["resources"])
     async def list_resources(
         cursor: str | None = None,
         refresh: bool = False,
     ) -> dict[str, Any]:
         return to_jsonable(await shared_client.list_resources(cursor=cursor, refresh=refresh))
 
-    @app.get("/v1/resource-templates", tags=["resources"])
+    @router.get("/v1/resource-templates", tags=["resources"])
     async def list_resource_templates(
         cursor: str | None = None,
         refresh: bool = False,
@@ -242,27 +250,30 @@ def create_app(
             await shared_client.list_resource_templates(cursor=cursor, refresh=refresh)
         )
 
-    @app.post("/v1/resources/read", tags=["resources"])
+    @router.post("/v1/resources/read", tags=["resources"])
     async def read_resource(body: ResourceReadRequest) -> dict[str, Any]:
         return to_jsonable(await shared_client.read_resource(body.uri, refresh=body.refresh))
 
-    @app.get("/v1/prompts", tags=["prompts"])
+    @router.get("/v1/prompts", tags=["prompts"])
     async def list_prompts(
         cursor: str | None = None,
         refresh: bool = False,
     ) -> dict[str, Any]:
         return to_jsonable(await shared_client.list_prompts(cursor=cursor, refresh=refresh))
 
-    @app.post("/v1/prompts/{name}/get", tags=["prompts"])
+    @router.post("/v1/prompts/{name}/get", tags=["prompts"])
     async def get_prompt(name: str, body: PromptGetRequest) -> dict[str, Any]:
         return to_jsonable(await shared_client.get_prompt(name, body.arguments))
 
-    @app.post("/v1/completions", tags=["prompts"])
+    @router.post("/v1/completions", tags=["prompts"])
     async def complete(body: CompletionRequest) -> dict[str, Any]:
         try:
             ref = body.parsed_ref()
         except ValueError as exc:
             raise ToolValidationError(str(exc)) from exc
-        return to_jsonable(await shared_client.complete(ref, body.argument, body.context_arguments))
+        return to_jsonable(
+            await shared_client.complete(ref, body.argument.model_dump(), body.context_arguments)
+        )
 
+    app.include_router(router)
     return app

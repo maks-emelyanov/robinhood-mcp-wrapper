@@ -64,25 +64,38 @@ class FileTokenStorage:
         self._write_lock = threading.Lock()
 
     def _read_file(self) -> dict[str, Any]:
-        if not self.path.exists():
-            return {"version": _FILE_VERSION}
         if self.path.is_symlink():
             raise CredentialStoreError("Credential file must not be a symbolic link")
 
+        descriptor: int | None = None
         try:
-            file_stat = self.path.stat()
+            # Inspect the opened file rather than a path that can be replaced
+            # between the ownership check and reading secrets. O_NONBLOCK also
+            # prevents a named pipe from hanging before it is rejected.
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+            descriptor = os.open(self.path, flags)
+            file_stat = os.fstat(descriptor)
             if not stat.S_ISREG(file_stat.st_mode):
                 raise CredentialStoreError("Credential path is not a regular file")
             if hasattr(os, "getuid") and file_stat.st_uid != os.getuid():
                 raise CredentialStoreError("Credential file is not owned by the current user")
             if stat.S_IMODE(file_stat.st_mode) & 0o077:
-                os.chmod(self.path, 0o600)
-            with self.path.open(encoding="utf-8") as handle:
+                if hasattr(os, "fchmod"):
+                    os.fchmod(descriptor, 0o600)
+                else:  # Windows has no descriptor-based chmod.
+                    os.chmod(self.path, 0o600)
+            with os.fdopen(descriptor, encoding="utf-8") as handle:
+                descriptor = None
                 payload = json.load(handle)
+        except FileNotFoundError:
+            return {"version": _FILE_VERSION}
         except CredentialStoreError:
             raise
         except (OSError, TypeError, ValueError) as exc:
             raise CredentialStoreError(f"Unable to read credential file: {self.path}") from exc
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
 
         if not isinstance(payload, dict) or payload.get("version") != _FILE_VERSION:
             raise CredentialStoreError(f"Credential file has an unsupported format: {self.path}")
@@ -98,7 +111,10 @@ class FileTokenStorage:
                 dir=self.path.parent,
             )
             temporary_path = Path(temporary_name)
-            os.fchmod(descriptor, 0o600)
+            if hasattr(os, "fchmod"):
+                os.fchmod(descriptor, 0o600)
+            else:
+                os.chmod(temporary_path, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
                 descriptor = None
                 json.dump(payload, handle, indent=2, sort_keys=True)
